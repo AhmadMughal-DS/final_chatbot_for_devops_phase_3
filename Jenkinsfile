@@ -4,7 +4,7 @@ pipeline {
     
     environment {
         PROJECT_NAME = 'devops_chatbot_pipeline'
-        DOCKER_COMPOSE_FILE = 'docker-compose'
+        DOCKER_COMPOSE_FILE = 'docker-compose.yml'
         GITHUB_REPO = 'https://github.com/AhmadMughal-DS/final_chatbot_for_devops_phase_3'
     }
     
@@ -27,11 +27,14 @@ pipeline {
                 sh 'docker --version'
                 sh 'docker-compose --version || docker compose --version'
                 
-                // Build the Docker images - no sudo
-                sh '''
-                    # Use docker compose directly without fallback to sudo
-                    docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --no-cache
-                '''
+                // Navigate to the cloned repository directory
+                dir('final_chatbot_for_devops_phase_3') {
+                    // Build the Docker images - no sudo
+                    sh '''
+                        # Use docker compose directly without fallback to sudo
+                        docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --no-cache
+                    '''
+                }
             }
         }
         
@@ -39,20 +42,23 @@ pipeline {
             steps {
                 echo 'Deploying application with Docker Compose'
                 
-                // Stop any existing containers with the same project name
-                sh '''
-                    docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down || \
-                    echo "No existing containers to stop"
-                '''
-                
-                // Start the containers in detached mode
-                sh '''
-                    docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} up -d
-                    echo "Deployment complete"
-                '''
-                
-                // Verify that the containers are running
-                sh 'docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} ps'
+                // Navigate to the cloned repository directory
+                dir('final_chatbot_for_devops_phase_3') {
+                    // Stop any existing containers with the same project name
+                    sh '''
+                        docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down || \
+                        echo "No existing containers to stop"
+                    '''
+                    
+                    // Start the containers in detached mode
+                    sh '''
+                        docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} up -d
+                        echo "Deployment complete"
+                    '''
+                    
+                    // Verify that the containers are running
+                    sh 'docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} ps'
+                }
             }
         }
         
@@ -271,11 +277,15 @@ EOF
         stage('Auto-Stop After 5 Minutes') {
             steps {
                 echo 'Setting up automatic container shutdown after 5 minutes'
-                sh '''
-                    echo "Containers will be stopped after 5 minutes..."
-                    (sleep 300 && docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down) &
-                    echo "Auto-stop scheduled!"
-                '''
+                
+                // Navigate to the cloned repository directory
+                dir('final_chatbot_for_devops_phase_3') {
+                    sh '''
+                        echo "Containers will be stopped after 5 minutes..."
+                        (sleep 300 && docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down) &
+                        echo "Auto-stop scheduled!"
+                    '''
+                }
             }
         }
     }
