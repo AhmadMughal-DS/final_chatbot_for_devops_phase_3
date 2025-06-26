@@ -24,15 +24,14 @@ pipeline {
             steps {
                 echo 'Building Docker containers'
                 // Check Docker and Docker Compose installation
-                sh 'docker --version'
-                sh 'docker-compose --version || docker compose --version'
+                sh 'docker --version || sudo docker --version'
+                sh 'docker-compose --version || sudo docker-compose --version'
                 
                 // Navigate to the cloned repository directory
                 dir('final_chatbot_for_devops_phase_3') {
-                    // Build the Docker images - no sudo
+                    // Build the Docker images with sudo
                     sh '''
-                        # Use docker compose directly without fallback to sudo
-                        docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --no-cache
+                        sudo docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --no-cache
                     '''
                 }
             }
@@ -46,18 +45,18 @@ pipeline {
                 dir('final_chatbot_for_devops_phase_3') {
                     // Stop any existing containers with the same project name
                     sh '''
-                        docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down || \
+                        sudo docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down || \
                         echo "No existing containers to stop"
                     '''
                     
                     // Start the containers in detached mode
                     sh '''
-                        docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} up -d
+                        sudo docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} up -d
                         echo "Deployment complete"
                     '''
                     
                     // Verify that the containers are running
-                    sh 'docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} ps'
+                    sh 'sudo docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} ps'
                 }
             }
         }
@@ -69,10 +68,10 @@ pipeline {
                 sh 'sleep 50'
                 
                 // Check if the container is running
-                sh 'docker ps | grep devops_chatbot || echo "Container not found"'
+                sh 'sudo docker ps | grep devops_chatbot || echo "Container not found"'
                 
                 // Show logs for debugging
-                sh 'docker logs devops_chatbot_backend || echo "Could not get container logs"'
+                sh 'sudo docker logs devops_chatbot_backend || echo "Could not get container logs"'
             }
         }
         
@@ -85,27 +84,24 @@ pipeline {
                     // Install Chrome and dependencies for Selenium
                     sh '''
                         # Update package list
-                        apt-get update
+                        sudo apt-get update
                         
                         # Install Chrome dependencies
-                        apt-get install -y wget gnupg2 software-properties-common
+                        sudo apt-get install -y wget gnupg2 software-properties-common
                         
                         # Add Google Chrome repository
-                        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
-                        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+                        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+                        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
                         
                         # Install Google Chrome
-                        apt-get update
-                        apt-get install -y google-chrome-stable
+                        sudo apt-get update
+                        sudo apt-get install -y google-chrome-stable
                         
-                        # Install Python pip if not available
-                        apt-get install -y python3-pip
-                        
-                        # Install Python dependencies
+                        # Install Python dependencies (assuming Python3 and pip3 are already installed)
                         pip3 install -r requirements.txt
                         
                         # Install additional dependencies for headless Chrome
-                        apt-get install -y xvfb
+                        sudo apt-get install -y xvfb
                     '''
                     
                     // Wait a bit more for the application to be fully ready
@@ -282,7 +278,7 @@ EOF
                 dir('final_chatbot_for_devops_phase_3') {
                     sh '''
                         echo "Containers will be stopped after 5 minutes..."
-                        (sleep 300 && docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down) &
+                        (sleep 300 && sudo docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} down) &
                         echo "Auto-stop scheduled!"
                     '''
                 }
@@ -297,7 +293,7 @@ EOF
             // Show final container status
             sh '''
                 echo "Final container status:"
-                docker ps | grep devops_chatbot || echo "No chatbot containers running"
+                sudo docker ps | grep devops_chatbot || echo "No chatbot containers running"
             '''
             
             deleteDir() // Clean workspace after build
@@ -314,7 +310,7 @@ EOF
             // Show application logs for debugging
             sh '''
                 echo "Application logs for debugging:"
-                docker logs devops_chatbot_backend || echo "Could not get backend logs"
+                sudo docker logs devops_chatbot_backend || echo "Could not get backend logs"
             '''
             
             // You can add notification steps here (email, Slack, etc.)
