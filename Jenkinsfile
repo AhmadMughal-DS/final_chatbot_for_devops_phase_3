@@ -4,7 +4,7 @@ pipeline {
     
     environment {
         PROJECT_NAME = 'devops_chatbot_pipeline'
-        DOCKER_COMPOSE_FILE = 'docker-compose.yml'
+        DOCKER_COMPOSE_FILE = 'docker-compose'
         GITHUB_REPO = 'https://github.com/AhmadMughal-DS/final_chatbot_for_devops_phase_3'
     }
     
