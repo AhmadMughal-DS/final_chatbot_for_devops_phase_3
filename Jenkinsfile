@@ -30,7 +30,7 @@ pipeline {
                 // Build the Docker images - no sudo
                 sh '''
                     # Use docker compose directly without fallback to sudo
-                    docker-compose -p ${PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --no-cache
+                    docker-compose -p ${PROJECT_NAME} build --no-cache
                 '''
             }
         }
