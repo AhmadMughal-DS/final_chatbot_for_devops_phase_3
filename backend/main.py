@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr
 from groq import Groq
 import os
 from openai import OpenAI
+from typing import Optional
 
 
 
@@ -23,9 +24,8 @@ DEBUG = os.getenv("DEBUG", "0") == "1"
 print(f"Connecting to MongoDB at {MONGODB_URI.split('@')[1] if '@' in MONGODB_URI else 'mongodb'}")
 try:
     client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
-    # Validate connection
-    client.admin.command('ismaster')
-    print("MongoDB connection successful")
+    # Note: Connection validation will happen on first actual use
+    print("MongoDB client initialized")
     db = client.devops_assignment
 except Exception as e:
     print(f"MongoDB connection error: {str(e)}")
@@ -221,7 +221,6 @@ try:
 except Exception as e:
     print(f"Error initializing templates: {str(e)}")
     # Create a minimal templates object that will return static HTML
-    from fastapi.templating import _TemplateResponse
     
     class FallbackTemplates:
         def __init__(self):
@@ -290,16 +289,9 @@ async def read_root(request: Request):
         return HTMLResponse(content=html_content)
 
 @app.post("/signup")
-async def signup(email: EmailStr = Form(...), password: str = Form(...), request: Request = None):
+async def signup(request: Request, email: EmailStr = Form(...), password: str = Form(...)):
     try:
         print(f"Processing signup for email: {email}")
-        
-        # Add fallback for missing Request object (debugging purposes)
-        if request is None:
-            print("WARNING: Request object is None, creating a mock request")
-            from fastapi.testclient import TestClient
-            test_client = TestClient(app)
-            request = test_client.get("/").request
         
         # Try creating a new user. If the user exists, create_user returns None.
         user = await create_user(email, password)
@@ -394,7 +386,7 @@ async def get_signin(request: Request):
         return HTMLResponse(content=html_content)
 
 @app.post("/signin")
-async def signin_post(email: EmailStr = Form(...), password: str = Form(...), request: Request = None):
+async def signin_post(request: Request, email: EmailStr = Form(...), password: str = Form(...)):
     try:
         print(f"Processing signin for email: {email}")
         
@@ -422,13 +414,10 @@ async def signin_post(email: EmailStr = Form(...), password: str = Form(...), re
             traceback.print_exc()
         
         # If request is available, return template response
-        if request:
-            return templates.TemplateResponse(
-                "signin.html", 
-                {"request": request, "error": "An error occurred during sign in. Please try again."}
-            )
-        # Otherwise fall back to redirect
-        return RedirectResponse(url="/signin?error=System error", status_code=303)
+        return templates.TemplateResponse(
+            "signin.html", 
+            {"request": request, "error": "An error occurred during sign in. Please try again."}
+        )
 
 @app.get("/welcome", response_class=HTMLResponse)
 async def welcome(request: Request):
@@ -469,8 +458,11 @@ async def ask_devops_doubt(request: QueryRequest):
     print(f"Received request with user_id: {request.user_id} and message: {request.message[:20]}...")
     
     system_prompt = """
-    You are a helpful assistant that solves doubts about the DevOps class taught by Sir Qasim Malik...
-    (Include the full original system prompt here)
+    You are a helpful assistant that solves doubts about the DevOps class taught by Sir Qasim Malik.
+    Sir Qasim Malik is a DevOps Engineer and Instructor at the COMSATS university islamabad
+    he teach us Git github OS aws aws-ec2 Jenkins kubernetes docker docker-compose.
+    Ask questions related to these topics and provide clear, concise answers.
+    if question is not related to these topics then say "I am sorry, I can only answer questions related to DevOps topics taught by Sir Qasim Malik."
     """
 
     try:
@@ -487,17 +479,32 @@ async def ask_devops_doubt(request: QueryRequest):
         raise HTTPException(status_code=500, detail=f"Failed to communicate with Novita AI API: {str(e)}")
 
     if stream:
-        # Optional: Handle streaming responses (basic example)
+        # Handle streaming responses
         full_response = ""
-        for chunk in chat_completion:
-            part = chunk.choices[0].delta.content or ""
-            full_response += part
-        response = full_response.strip()
+        try:
+            for chunk in chat_completion:
+                if hasattr(chunk, 'choices') and len(getattr(chunk, 'choices', [])) > 0:
+                    delta = getattr(chunk.choices[0], 'delta', None)  # type: ignore
+                    if delta and hasattr(delta, 'content'):
+                        content = getattr(delta, 'content', '')
+                        if content:
+                            full_response += content
+            response = full_response.strip()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error processing streaming response: {str(e)}")
     else:
         try:
-            response = chat_completion.choices[0].message.content.strip()
-        except (KeyError, IndexError, AttributeError):
-            raise HTTPException(status_code=500, detail="Invalid response format from Novita AI.")
+            if hasattr(chat_completion, 'choices') and len(getattr(chat_completion, 'choices', [])) > 0:
+                message = getattr(chat_completion.choices[0], 'message', None)  # type: ignore
+                if message and hasattr(message, 'content'):
+                    content = getattr(message, 'content', '')
+                    response = content.strip() if content else "No response generated"
+                else:
+                    raise HTTPException(status_code=500, detail="Invalid message format from Novita AI.")
+            else:
+                raise HTTPException(status_code=500, detail="Invalid response format from Novita AI.")
+        except (KeyError, IndexError, AttributeError) as e:
+            raise HTTPException(status_code=500, detail=f"Error parsing response: {str(e)}")
 
     # Save question and answer to DB
     user_save_result = await save_chat(request.user_id, request.message, "user")

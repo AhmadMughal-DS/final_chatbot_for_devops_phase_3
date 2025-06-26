@@ -3,9 +3,9 @@ pipeline {
     agent any
     
     environment {
-        PROJECT_NAME = 'devops_chatbot_ci'
+        PROJECT_NAME = 'devops_chatbot_pipeline'
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
-        GITHUB_REPO = 'https://github.com/AhmadMughal-DS/final_chatbot_for_devops'
+        GITHUB_REPO = 'https://github.com/AhmadMughal-DS/final_chatbot_for_devops_phase_3'
     }
     
     stages {
@@ -16,52 +16,7 @@ pipeline {
                 
                 // Fetch code from GitHub repository
                 echo 'Fetching code from GitHub repository'
-                git branch: 'main', url: "${GITHUB_REPO}"
-            }
-        }
-        
-        stage('Setup Python') {
-            steps {
-                echo 'Setting up Python environment'
-                // Use the Python tool in Jenkins without sudo
-                sh '''
-                    if command -v python3 &> /dev/null; then
-                        echo "Python found: $(python3 --version)"
-                    else
-                        echo "Python not found, but continuing anyway"
-                    fi
-                '''
-                
-                // Skip pytest installation as it's not essential
-                echo "Skipping pytest installation for now"
-            }
-        }
-        
-        stage('Test') {
-            steps {
-                echo 'Running Python tests'
-                sh 'python3 -m pytest -v || python -m pytest -v || echo "No tests available, continuing..."'
-            }
-        }
-        
-        stage('Fix Docker Permissions') {
-            steps {
-                echo 'Checking Docker access'
-                // Just check if Docker is accessible
-                sh '''
-                    # Check if docker command works
-                    if docker info >/dev/null 2>&1; then
-                        echo "Docker is accessible"
-                    else
-                        echo "Docker command failed. This could be due to permissions or Docker not running."
-                        echo "Jenkins may need to be added to the docker group. Ask your administrator to run:"
-                        echo "sudo usermod -aG docker jenkins"
-                        echo "sudo systemctl restart jenkins"
-                    fi
-                    
-                    # Show Docker version anyway
-                    docker version || true
-                '''
+                sh    """ git clone "${GITHUB_REPO}" """
             }
         }
         
@@ -105,16 +60,65 @@ pipeline {
             steps {
                 echo 'Verifying the deployment'
                 // Wait for application to be ready
-                sh 'sleep 10'
+                sh 'sleep 50'
                 
                 // Check if the container is running
                 sh 'docker ps | grep devops_chatbot || echo "Container not found"'
                 
-                // Try to connect to the backend service
-                sh 'curl -s --retry 5 --retry-delay 5 http://localhost:8000/ || echo "Service may still be starting..."'
-                
                 // Show logs for debugging
                 sh 'docker logs devops_chatbot_backend || echo "Could not get container logs"'
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo 'Running Frontend Chat Test'
+                
+                // Navigate to the cloned repository directory
+                dir('final_chatbot_for_devops_phase_3') {
+                    // Install Chrome and dependencies for Selenium
+                    sh '''
+                        # Update package list
+                        apt-get update
+                        
+                        # Install Chrome dependencies
+                        apt-get install -y wget gnupg2 software-properties-common
+                        
+                        # Add Google Chrome repository
+                        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+                        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+                        
+                        # Install Google Chrome
+                        apt-get update
+                        apt-get install -y google-chrome-stable
+                        
+                        # Install Python dependencies (assuming Python3 and pip3 are already installed)
+                        pip3 install -r requirements.txt
+                        
+                        # Install additional dependencies for headless Chrome
+                        apt-get install -y xvfb
+                    '''
+                    
+                    // Wait for the application to be fully ready
+                    sh 'sleep 30'
+                    
+                    // Run the frontend chat test
+                    sh '''
+                        echo "Running test_frontend_chat.py..."
+                        
+                        # Set display for headless Chrome (if needed)
+                        export DISPLAY=:99
+                        Xvfb :99 -screen 0 1024x768x24 &
+                        
+                        # Wait for Xvfb to start
+                        sleep 5
+                        
+                        # Run the existing frontend chat test
+                        python3 tests/test_frontend_chat.py
+                        
+                        echo "Frontend Chat Test completed!"
+                    '''
+                }
             }
         }
         
@@ -133,13 +137,30 @@ pipeline {
     post {
         always {
             echo 'Cleaning up workspace'
+            
+            // Show final container status
+            sh '''
+                echo "Final container status:"
+                docker ps | grep devops_chatbot || echo "No chatbot containers running"
+            '''
+            
             deleteDir() // Clean workspace after build
         }
         success {
-            echo 'CI Pipeline completed successfully!'
+            echo '🎉 CI Pipeline completed successfully!'
+            echo '✅ All stages passed including frontend tests'
+            echo '🚀 Application is deployed and tested'
         }
         failure {
-            echo 'CI Pipeline failed!'
+            echo '❌ CI Pipeline failed!'
+            echo '🔍 Check the logs above for details'
+            
+            // Show application logs for debugging
+            sh '''
+                echo "Application logs for debugging:"
+                docker logs devops_chatbot_backend || echo "Could not get backend logs"
+            '''
+            
             // You can add notification steps here (email, Slack, etc.)
         }
     }
