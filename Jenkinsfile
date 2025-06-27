@@ -98,7 +98,11 @@ pipeline {
                         sudo apt-get install -y google-chrome-stable
                         
                         # Install Python dependencies (assuming Python3 and pip3 are already installed)
-                        pip3 install -r requirements.txt
+
+                        
+                        source venv/bin/activate
+
+                        pip3 install -r requirements.txt --break-system-packages
                         
                         # Install additional dependencies for headless Chrome
                         sudo apt-get install -y xvfb
