@@ -156,7 +156,7 @@ async def get_chat_history(user_id):
 
 
 
-
+print("check for first commit")
 from starlette.concurrency import run_in_threadpool
 novita_client = OpenAI(
     base_url="https://api.novita.ai/v3/openai",
