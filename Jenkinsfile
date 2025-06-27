@@ -99,8 +99,8 @@ pipeline {
                         
                         # Install Python dependencies (assuming Python3 and pip3 are already installed)
 
-                        
-                        source venv/bin/activate
+
+                        #source venv/bin/activate
 
                         pip3 install -r requirements.txt --break-system-packages
                         
